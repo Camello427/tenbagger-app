@@ -1,0 +1,91 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Tenbagger">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#070B16">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>Tenbagger</title>
+<meta name="robots" content="noindex,nofollow">
+<style id="lock-style">
+html,body{margin:0;min-height:100%;background:#070B16;color:#E8ECF6;font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
+#lock{min-height:100vh;min-height:100dvh;display:grid;place-items:center;padding:24px;box-sizing:border-box}
+#lock form{width:min(360px,100%);display:flex;flex-direction:column;gap:14px;background:#0E152A;border:1px solid #1E2A47;border-radius:20px;padding:28px 22px;box-shadow:0 30px 80px -30px #000}
+#lock .mark{width:56px;height:56px;border-radius:15px;background:linear-gradient(135deg,#FFD777,#F5C04A 50%,#D99A1E);color:#1B1404;display:grid;place-items:center;font:800 19px/1 system-ui,sans-serif;letter-spacing:-.04em;margin:0 auto}
+#lock h1{margin:0;text-align:center;font:700 22px/1.2 system-ui,sans-serif;letter-spacing:-.02em}
+#lock p{margin:0;text-align:center;color:#8C97B4;font-size:14px}
+#lock input[type=password]{font:inherit;font-size:17px;padding:13px 14px;border-radius:12px;border:1px solid #2A3757;background:#131C35;color:inherit;letter-spacing:.04em}
+#lock input[type=password]:focus{outline:none;border-color:#F5C04A;box-shadow:0 0 0 3px rgba(245,192,74,.15)}
+#lock label{display:flex;gap:8px;align-items:center;color:#B4BDD4;font-size:14px}
+#lock button{font:600 17px system-ui,sans-serif;padding:13px;border:0;border-radius:12px;background:#F5C04A;color:#1B1404;cursor:pointer}
+#lock button:disabled{opacity:.6}
+#lock .err{color:#FB6A7A;min-height:1.4em;text-align:center;font-size:14px}
+</style></head><body>
+<div id="lock"><form id="lock-form" autocomplete="on">
+  <div class="mark">10×</div><h1>Tenbagger</h1><p>Enter your password to unlock.</p>
+  <input type="text" name="username" autocomplete="username" value="Tenbagger" hidden>
+  <input type="password" id="lock-pw" name="password" autocomplete="current-password" placeholder="Password" aria-label="Password" required>
+  <label><input type="checkbox" id="lock-keep" checked> Remember on this device</label>
+  <button id="lock-go" type="submit">Unlock</button><div class="err" id="lock-err" role="alert"></div>
+</form></div>
+<script>
+(function () {
+  "use strict";
+  var LOCK = {"salt":"oYvRJbCtwvZNn40jM/nl/w==","iter":600000}, KEEP = "tenbagger:lock", key = null;
+  var b64 = function (u) { var s = ""; for (var i = 0; i < u.length; i++) s += String.fromCharCode(u[i]); return btoa(s); };
+  var unb64 = function (s) { var b = atob(s), u = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; };
+  var err = function (m) { document.getElementById("lock-err").textContent = m; };
+  if (!(window.crypto && crypto.subtle && window.DecompressionStream)) { err("This browser is too old to unlock the app. Update iOS (16.4 or later) or use a current browser."); }
+  async function open(buf) {
+    var pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: buf.slice(0, 12) }, key, buf.slice(12));
+    return new Response(new Blob([pt]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer();
+  }
+  // The app's lookup database is encrypted too: Lookup fetches through this.
+  window.__tbFetchJSON = async function (p) {
+    var r = await fetch(p.replace(/\.json$/, ".bin"));
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return JSON.parse(new TextDecoder().decode(await open(new Uint8Array(await r.arrayBuffer()))));
+  };
+  window.__tbLock = function () { try { localStorage.removeItem(KEEP); } catch (e) {} location.reload(); };
+  var appBuf = null;
+  var getApp = function () { if (!appBuf) appBuf = fetch("app.bin").then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.arrayBuffer(); }).catch(function (e) { appBuf = null; throw e; }); return appBuf; };
+  getApp().catch(function () {});
+  function mount(html) {
+    document.getElementById("lock").remove(); document.getElementById("lock-style").remove();
+    var t = document.createElement("template"); t.innerHTML = html;
+    Array.prototype.slice.call(t.content.childNodes).forEach(function (n) {
+      if (n.nodeName === "SCRIPT") { var s = document.createElement("script"); s.textContent = n.textContent; document.body.appendChild(s); }
+      else if (/^(TITLE|META|LINK|STYLE)$/.test(n.nodeName)) document.head.appendChild(n);
+      else document.body.appendChild(n);
+    });
+  }
+  async function unlock(raw, remember) {
+    key = await crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["decrypt"]);
+    var html;
+    try { html = new TextDecoder().decode(await open(new Uint8Array(await getApp()))); }
+    catch (e) { key = null; if (e && e.name === "OperationError") return "wrong"; throw e; }
+    if (remember) { try { localStorage.setItem(KEEP, b64(raw)); } catch (e) {} }
+    mount(html);
+    return "ok";
+  }
+  var saved = null; try { saved = localStorage.getItem(KEEP); } catch (e) {}
+  if (saved) unlock(unb64(saved), false).then(function (r) { if (r === "wrong") { try { localStorage.removeItem(KEEP); } catch (e) {} } }).catch(function () { err("Couldn't load the app. Check your connection and reopen it."); });
+  document.getElementById("lock-form").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    var pw = document.getElementById("lock-pw").value, go = document.getElementById("lock-go");
+    if (!pw) return;
+    go.disabled = true; go.textContent = "Unlocking…"; err("");
+    try {
+      var base = await crypto.subtle.importKey("raw", new TextEncoder().encode(pw), "PBKDF2", false, ["deriveBits"]);
+      var raw = new Uint8Array(await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: unb64(LOCK.salt), iterations: LOCK.iter }, base, 256));
+      var r = await unlock(raw, document.getElementById("lock-keep").checked);
+      if (r === "wrong") { err("Wrong password."); go.disabled = false; go.textContent = "Unlock"; document.getElementById("lock-pw").select(); }
+    } catch (x) { err("Couldn't load the app. Check your connection and try again."); go.disabled = false; go.textContent = "Unlock"; }
+  });
+})();
+</script>
+<script>if ("serviceWorker" in navigator && window.isSecureContext) navigator.serviceWorker.register("sw.js").catch(function () {});</script>
+</body></html>
