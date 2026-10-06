@@ -1,7 +1,7 @@
 /* Offline support and instant launch for the installed phone app (dist/site, dist/site-locked).
  * Same-origin files are served from the cache straight away, and refreshed from the network in the background,
  * so the app opens instantly (even offline) and a new version shows up on the next launch. Fonts are cache-first. */
-const CACHE = "tenbagger-2026-10-02-2219040";
+const CACHE = "tenbagger-2026-10-02-2234610";
 const SHELL = ["./", "app.bin", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 
 self.addEventListener("install", (e) => {
