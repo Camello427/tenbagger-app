@@ -1,7 +1,8 @@
-/* Offline support and instant launch for the installed phone app (dist/site, dist/site-locked).
- * Same-origin files are served from the cache straight away, and refreshed from the network in the background,
- * so the app opens instantly (even offline) and a new version shows up on the next launch. Fonts are cache-first. */
-const CACHE = "tenbagger-2026-10-02-2236035";
+/* Offline support for the installed phone app (dist/site, dist/site-locked).
+ * Same-origin files are network-first so each morning's new data shows on the first open, but the network
+ * gets at most 3 s: offline or on a slow connection the cached copy is used (and refreshed in the background).
+ * GitHub Pages' ETags make the check cheap when nothing changed. Fonts are cache-first. */
+const CACHE = "tenbagger-2026-10-06-2242502";
 const SHELL = ["./", "app.bin", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 
 self.addEventListener("install", (e) => {
@@ -18,10 +19,13 @@ self.addEventListener("fetch", (e) => {
   const url = new URL(req.url);
   if (url.origin === self.location.origin) {
     e.respondWith(caches.open(CACHE).then(async (c) => {
-      const hit = await c.match(req, { ignoreSearch: true });
       const fresh = fetch(req).then((res) => { if (res && res.ok) c.put(req, res.clone()); return res; }).catch(() => null);
-      if (hit) { e.waitUntil(fresh); return hit; } // instant; the refreshed copy is used next time
-      return (await fresh) || (req.mode === "navigate" && (await c.match("./"))) || Response.error();
+      const hit = await c.match(req, { ignoreSearch: true });
+      if (!hit) return (await fresh) || (req.mode === "navigate" && (await c.match("./"))) || Response.error();
+      const res = await Promise.race([fresh, new Promise((r) => setTimeout(r, 3000, null))]);
+      if (res && res.ok) return res;
+      e.waitUntil(fresh); // slow or offline: cached copy now, the fresh one is saved for next time
+      return hit;
     }));
   } else if (/^fonts\.(googleapis|gstatic)\.com$/.test(url.hostname)) {
     e.respondWith(caches.open(CACHE).then(async (c) => (await c.match(req)) || fetch(req).then((res) => { if (res.ok) c.put(req, res.clone()); return res; })));
