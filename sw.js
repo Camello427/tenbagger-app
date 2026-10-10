@@ -2,7 +2,7 @@
  * Same-origin files are network-first so each morning's new data shows on the first open, but the network
  * gets at most 3 s: offline or on a slow connection the cached copy is used (and refreshed in the background).
  * GitHub Pages' ETags make the check cheap when nothing changed. Fonts are cache-first. */
-const CACHE = "tenbagger-2026-10-08-2245104";
+const CACHE = "tenbagger-2026-10-09-2240402";
 const SHELL = ["./", "app.bin", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 
 self.addEventListener("install", (e) => {
